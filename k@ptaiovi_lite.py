@@ -307,7 +307,7 @@ def phone_lookup_flow(learning):
 
 #-------------------------------------Network_Scan_advanced---------------------------------------
 
-def new_network_scan_flow(subnet="10.0.0.0/24":
+def new_network_scan_flow(subnet="10.0.0.0/24"):
     import subprocess
     import socket
     import requests
