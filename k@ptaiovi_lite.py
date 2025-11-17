@@ -307,7 +307,7 @@ def phone_lookup_flow(learning):
 
 #-------------------------------------Network_Scan_advanced---------------------------------------
 
-def new_network_scan_flow():
+def new_network_scan_flow(subnet="10.0.0.0/24":
     import subprocess
     import socket
     import requests
@@ -2847,7 +2847,7 @@ def main():
         elif choice == "20":
             integrity_vault_flow(learning)
         elif choice == "21":
-	        new_network_scan_flow()        
+	        new_network_scan_flow(subnet="10.0.0.0/24")        
         elif choice == "s":
             network_scanner_flow(learning)
         elif choice == "*":
