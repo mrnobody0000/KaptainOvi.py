@@ -303,19 +303,151 @@ def phone_lookup_flow(learning):
         print(R + "Failed to save capture report: " + str(e) + RST)
         log("PHONE capture save fail " + str(e))
 
+#-----------------------------------------------------------------------------------------
+
+#-------------------------------------Network_Scan_advanced---------------------------------------
+
+def new_network_scan_flow():
+    import subprocess
+    import socket
+    import requests
+    from scapy.all import ARP, Ether, srp
+
+    # --- Vendor lookup function ---
+    def get_vendor(mac):
+        oui = mac.upper()[0:8].replace(":", "-")
+        try:
+            r = requests.get(f"https://api.macvendors.com/{oui}", timeout=3)
+            return r.text
+        except:
+            return "Unknown vendor"
+
+    print(f"\nScanning network: {subnet}")
+    arp = ARP(pdst=subnet)
+    ether = Ether(dst="ff:ff:ff:ff:ff:ff")
+    packet = ether / arp
+
+    result = srp(packet, timeout=2, verbose=0)[0]
+
+    devices = []
+
+    for sent, received in result:
+        ip = received.psrc
+        mac = received.hwsrc
+
+        # Hostname lookup
+        try:
+            hostname = socket.gethostbyaddr(ip)[0]
+        except:
+            hostname = "unknown"
+
+        # Vendor lookup
+        vendor = get_vendor(mac)
+
+        devices.append((ip, mac, hostname, vendor))
+
+    # Print table
+    print("\nIdentified devices:")
+    print("{:<15} {:<20} {:<30} {:<25}".format("IP Address", "MAC Address", "Hostname", "Vendor"))
+    for ip, mac, hostname, vendor in devices:
+        print("{:<15} {:<20} {:<30} {:<25}".format(ip, mac, hostname, vendor))
+
+    # --- Save network scan report ---
+    from datetime import datetime
+    import os
+    import json
+    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+
+    # Directories
+    scan_dir = os.path.join(REPORTS_DIR, "network_scan")
+    os.makedirs(scan_dir, exist_ok=True)
+
+    json_path = os.path.join(scan_dir, f"scan_{timestamp}.json")
+    txt_path = os.path.join(scan_dir, f"scan_{timestamp}.txt")
+    alert_path = os.path.join(scan_dir, f"scan_{timestamp}_alerts.txt")
+
+    # Current scan as JSON
+    json_report = {
+        "timestamp": timestamp,
+        "subnet": subnet,
+        "device_count": len(devices),
+        "devices": [
+            {
+                "ip": ip,
+                "mac": mac,
+                "hostname": hostname,
+                "vendor": vendor
+            }
+            for (ip, mac, hostname, vendor) in devices
+        ]
+    }
+
+    # -----------------------------------------
+    # 🔥 NEW DEVICE DETECTION
+    # -----------------------------------------
+    previous_devices = {}
+
+    # load the most recent previous scan if exists
+    try:
+        scans = [f for f in os.listdir(scan_dir) if f.endswith(".json")]
+        scans.sort()
+        if scans:
+            last_scan = scans[-1]  # newest
+            with open(os.path.join(scan_dir, last_scan), "r") as f:
+                prev_data = json.load(f)
+                for dev in prev_data["devices"]:
+                    previous_devices[dev["mac"]] = dev
+    except:
+        previous_devices = {}
+
+    # Compare lists
+    new_devices = []
+    for (ip, mac, hostname, vendor) in devices:
+        if mac not in previous_devices:
+            new_devices.append((ip, mac, hostname, vendor))
+
+    # Print alerts
+    if new_devices:
+        print("\n" + Y + "⚠ NEW DEVICES DETECTED ON NETWORK ⚠" + RST)
+        for ip, mac, hostname, vendor in new_devices:
+            print(f"{G}NEW DEVICE: {ip} | {mac} | {hostname} | {vendor}{RST}")
+    else:
+        print(G + "\nNo new devices detected since last scan." + RST)
+
+    # Save alerts to file
+    with open(alert_path, "w") as f:
+        if new_devices:
+            f.write("NEW DEVICES DETECTED:\n\n")
+            for ip, mac, hostname, vendor in new_devices:
+                f.write(f"{ip}  {mac}  {hostname}  {vendor}\n")
+        else:
+            f.write("No new devices detected.\n")
+
+    # -----------------------------------------
+
+    # Save JSON report
+    with open(json_path, "w") as f:
+        json.dump(json_report, f, indent=2)
+
+    # Save TXT report
+    with open(txt_path, "w") as f:
+        f.write("NETWORK SCAN REPORT\n")
+        f.write(f"Subnet: {subnet}\n")
+        f.write(f"Timestamp: {timestamp}\n")
+        f.write(f"Devices Found: {len(devices)}\n\n")
+        f.write("{:<15} {:<20} {:<30} {:<25}\n".format(
+            "IP Address", "MAC Address", "Hostname", "Vendor"
+        ))
+        f.write("-" * 95 + "\n")
+        for ip, mac, hostname, vendor in devices:
+            f.write("{:<15} {:<20} {:<30} {:<25}\n".format(ip, mac, hostname, vendor))
+
+    print(G + f"\nSaved network scan and alert report to: {scan_dir}" + RST)
+
+    return devices
 
 
-
-
-
-
-
-
-
-
-
-
-
+#---------------------------------------------------------------------------------------------
             
 
 #--------------------------Name / Email search ----------------
@@ -2668,6 +2800,7 @@ def main():
         print("18) The Final Super Report (Everything you need to know)")
         print("19) Host Summary")
         print("20) Integrity Vault")
+        print("21) New Deep scan")
         print("s) Network Scanner (fast stealth hybrid)")
         print("*) Tool The one")
         print("l) Toggle learning mode (current: " + ("ON" if learning else "OFF") + ")")
@@ -2713,6 +2846,8 @@ def main():
             host_summary_flow(learning)
         elif choice == "20":
             integrity_vault_flow(learning)
+        elif choice == "21":
+	        new_network_scan_flow()        
         elif choice == "s":
             network_scanner_flow(learning)
         elif choice == "*":
